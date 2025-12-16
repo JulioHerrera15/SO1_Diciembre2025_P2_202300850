@@ -1,0 +1,31 @@
+syntax = "proto3";
+package blackfriday;
+
+// Esto ayuda a Go a saber dónde poner el código generado
+option go_package = "./proto";
+
+// Mensaje con información de venta
+message ProductSaleRequest {
+  CategoriaProducto categoria = 1;
+  string producto_id = 2;
+  double precio = 3;
+  int32 cantidad_vendida = 4;
+}
+
+// Categorías (En Proto3 el primer enum debe ser 0)
+enum CategoriaProducto {
+  ELECTRONICA = 0;
+  ROPA = 1;
+  HOGAR = 2;
+  BELLEZA = 3;
+}
+
+// Respuesta del servidor
+message ProductSaleResponse {
+  string estado = 1;
+}
+
+// Servicio gRPC
+service ProductSaleService {
+  rpc ProcesarVenta (ProductSaleRequest) returns (ProductSaleResponse);
+}
