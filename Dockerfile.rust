@@ -1,0 +1,21 @@
+# Etapa 1: Compilación
+FROM rust:latest AS builder
+WORKDIR /app
+
+# Copiamos TODO el proyecto (incluyendo proto y rust-api)
+COPY . .
+
+# Instalamos el compilador protobuf
+RUN apt-get update && apt-get install -y protobuf-compiler
+
+# Entramos a la carpeta de rust y compilamos
+WORKDIR /app/rust-api
+RUN cargo build --release
+
+# Etapa 2: Imagen Final
+FROM debian:bookworm-slim
+WORKDIR /app
+# Copiamos el binario desde la ruta correcta
+COPY --from=builder /app/rust-api/target/release/rust-api .
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+CMD ["./rust-api"]

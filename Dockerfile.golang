@@ -1,0 +1,19 @@
+FROM golang:latest AS builder
+WORKDIR /app
+
+# Copiamos archivos de dependencias
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copiamos el código fuente y los protos
+COPY . .
+
+# Argumento para decidir qué servicio compilar (gateway, worker o consumer)
+ARG SERVICE_PATH
+RUN go build -o binary ./go-backend/${SERVICE_PATH}
+
+# Imagen final
+FROM debian:bookworm-slim
+WORKDIR /app
+COPY --from=builder /app/binary .
+CMD ["./binary"]
