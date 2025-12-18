@@ -28,7 +28,7 @@ func main() {
 	// 1. Configuración de Kafka (URL del servicio en Kubernetes)
 	kafkaBrokers := os.Getenv("KAFKA_BROKER_URL")
 	if kafkaBrokers == "" {
-		kafkaBrokers = "my-cluster-kafka-bootstrap.kafka.svc:9092" // Default para K8s
+		kafkaBrokers = "my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092" // Default para K8s
 	}
 	
 	// 2. Configuración de Valkey (URL del servicio en Kubernetes)

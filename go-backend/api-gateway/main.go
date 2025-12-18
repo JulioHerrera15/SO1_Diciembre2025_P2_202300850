@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"time"
-
+	"os"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -26,7 +26,11 @@ func main() {
 	// 1. Conectar con el Servidor gRPC (Worker)
 	// Nota: "localhost" funciona ahora porque estamos en la misma PC. 
 	// En Kubernetes, aquí pondremos el nombre del servicio DNS.
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	grpcHost := os.Getenv("GRPC_HOST")
+	if grpcHost == "" {
+		grpcHost = "localhost:50051"
+	}
+	conn, err := grpc.NewClient(grpcHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("No se pudo conectar al gRPC server: %v", err)
 	}
