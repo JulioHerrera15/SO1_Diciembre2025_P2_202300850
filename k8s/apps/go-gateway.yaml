@@ -17,6 +17,9 @@ spec:
         image: 3.131.135.47:5000/go-gateway:v1
         ports:
         - containerPort: 3000
+        env:
+        - name: GRPC_HOST
+          value: "go-worker-service:50051"
 ---
 apiVersion: v1
 kind: Service
