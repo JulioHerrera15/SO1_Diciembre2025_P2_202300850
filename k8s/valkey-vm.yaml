@@ -1,0 +1,81 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: valkey-vm
+  labels:
+    app: valkey-vm
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        app: valkey-vm
+    spec:
+      domain:
+        devices:
+          disks:
+            - name: containerdisk
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+          interfaces:
+          - name: default
+            masquerade: {}
+        resources:
+          requests:
+            memory: 1Gi 
+        machine:
+          type: ""
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: quay.io/containerdisks/fedora:latest
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+              #!/bin/bash
+              
+              # --- 1. SEGURIDAD (Primero aseguramos el acceso) ---
+              # Forzamos la contraseña de root inmediatamente
+              echo "root:123456" | chpasswd
+              # Permitimos login por consola serial (por si acaso)
+              echo "ttyS0" >> /etc/securetty
+
+              # --- 2. INSTALACIÓN ---
+              echo "Iniciando instalacion..."
+              
+              # Intentamos instalar redis y valkey-compat
+              dnf install -y redis valkey-compat-redis
+
+              # --- 3. CONFIGURACIÓN (Búsqueda inteligente) ---
+              # Buscamos dónde rayos está el archivo de configuración
+              CONF_FILE=$(find /etc -name "redis.conf" | head -n 1)
+              
+              if [ -z "$CONF_FILE" ]; then
+                  # Si no existe redis.conf, buscamos valkey.conf
+                  CONF_FILE=$(find /etc -name "valkey.conf" | head -n 1)
+              fi
+              
+              if [ -z "$CONF_FILE" ]; then
+                  echo "FATAL: No se encontro archivo de configuracion"
+              else
+                  echo "Configurando archivo: $CONF_FILE"
+
+                  # Aplicamos los cambios para acceso externo
+                  # Usamos sed con respaldo por seguridad
+                  sed -i 's/^bind 127.0.0.1/bind 0.0.0.0/' "$CONF_FILE"
+                  sed -i 's/^protected-mode yes/protected-mode no/' "$CONF_FILE"
+                  
+                  # --- 4. ARRANQUE ---
+                  # Iniciamos el servicio usando el binario correcto
+                  if command -v redis-server >/dev/null; then
+                      redis-server "$CONF_FILE" --daemonize yes
+                  elif command -v valkey-server >/dev/null; then
+                      valkey-server "$CONF_FILE" --daemonize yes
+                  fi
+              fi
