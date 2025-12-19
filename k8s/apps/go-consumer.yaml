@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-consumer
+  template:
+    metadata:
+      labels:
+        app: go-consumer
+    spec:
+      containers:
+      - name: go-consumer
+        image: 3.133.84.214:5000/go-consumer:v-final
+        env:
+        - name: KAFKA_BROKER_URL
+          value: "my-cluster-kafka-brokers.kafka.svc.cluster.local:9092"
+        - name: VALKEY_ADDRESS
+          value: "valkey-service.default.svc.cluster.local:6379"

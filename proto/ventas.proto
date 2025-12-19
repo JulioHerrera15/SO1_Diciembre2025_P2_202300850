@@ -12,7 +12,7 @@ message ProductSaleRequest {
   int32 cantidad_vendida = 4;
 }
 
-// Categorías (En Proto3 el primer enum debe ser 0)
+// Lista de categorías de productos
 enum CategoriaProducto {
   ELECTRONICA = 0;
   ROPA = 1;
