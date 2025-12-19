@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: go-consumer
-        image: 3.131.135.47:5000/go-consumer:v1
+        image: 3.133.84.214:5000/go-consumer:v-final
         env:
         - name: KAFKA_BROKER_URL
           value: "my-cluster-kafka-brokers.kafka.svc.cluster.local:9092"

@@ -14,9 +14,16 @@ spec:
     spec:
       containers:
       - name: rust-api
-        image: 3.131.135.47:5000/rust-api:v1
+        image: 3.133.84.214:5000/rust-api:v1
         ports:
         - containerPort: 8080
+        resources:
+          requests:
+            cpu: "100m"  # Solicita 10% de un núcleo
+            memory: "64Mi"
+          limits:
+            cpu: "250m"  # Límite duro de 25%
+            memory: "128Mi"
         env:
         - name: GO_SERVICE_URL
           value: "http://go-gateway-service:3000"

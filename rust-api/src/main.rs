@@ -25,7 +25,6 @@ async fn registrar_venta(
     println!("📦 Rust recibió: {}", info.producto_id);
 
     // Enviar a Go (Deployment 1)
-    // Usamos la URL configurada en el estado (localhost:3000 por ahora)
     let url = format!("{}/procesar", data.go_url);
 
     let res = data.client.post(&url)
@@ -53,7 +52,6 @@ async fn main() -> std::io::Result<()> {
     println!("🚀 API Rust corriendo en puerto 8080");
 
     // Configuración: URL del servicio de Go
-    // En local es localhost:3000. En K8s será una variable de entorno.
     let go_service_url = std::env::var("GO_SERVICE_URL")
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
 

@@ -15,9 +15,10 @@ import (
 )
 
 type VentaMsg struct {
-	ProductoID      string  `json:"producto_id"`
-	Precio          float64 `json:"precio"`
-	CantidadVendida int32   `json:"cantidad_vendida"`
+    Categoria       int     `json:"categoria"`
+    ProductoID      string  `json:"producto_id"`
+    Precio          float64 `json:"precio"`
+    CantidadVendida int32   `json:"cantidad_vendida"`
 }
 
 type server struct {
@@ -28,10 +29,12 @@ type server struct {
 func (s *server) ProcesarVenta(ctx context.Context, req *pb.ProductSaleRequest) (*pb.ProductSaleResponse, error) {
 	// 1. Preparar mensaje JSON
 	msg := VentaMsg{
+		// Convertimos el enum de Proto a int para el JSON
+		Categoria:       int(req.GetCategoria()),
 		ProductoID:      req.GetProductoId(),
 		Precio:          req.GetPrecio(),
 		CantidadVendida: req.GetCantidadVendida(),
-	}
+    }
 	msgBytes, _ := json.Marshal(msg)
 
 	// 2. Crear mensaje de Kafka
@@ -43,11 +46,11 @@ func (s *server) ProcesarVenta(ctx context.Context, req *pb.ProductSaleRequest) 
 	// 3. Enviar a Kafka
 	partition, offset, err := s.producer.SendMessage(kafkaMsg)
 	if err != nil {
-		log.Printf("❌ Error enviando a Kafka: %v", err)
+		log.Printf("[ERROR] Error enviando a Kafka: %v", err)
 		return &pb.ProductSaleResponse{Estado: "Error en Kafka"}, nil
 	}
 
-	fmt.Printf("✅ Enviado a Kafka [Particion: %d, Offset: %d]: %s\n", partition, offset, req.GetProductoId())
+	fmt.Printf("[OK] Enviado a Kafka [Particion: %d, Offset: %d]: %s\n", partition, offset, req.GetProductoId())
 
 	return &pb.ProductSaleResponse{Estado: "Procesado y en cola"}, nil
 }
@@ -72,16 +75,16 @@ func main() {
 		time.Sleep(5 * time.Second)
 	}
 
-	if err != nil { log.Fatalf("❌ Falló Kafka: %v", err) }
+	if err != nil { log.Fatalf("[ERROR] Falló Kafka: %v", err) }
 	defer producer.Close()
-	fmt.Println("✅ Conexión exitosa a Kafka")
+	fmt.Println("[OK] Conexión exitosa a Kafka")
 
 	lis, err := net.Listen("tcp", ":50051")
-	if err != nil { log.Fatalf("❌ Falló puerto: %v", err) }
+	if err != nil { log.Fatalf("[ERROR] Falló puerto: %v", err) }
 
 	s := grpc.NewServer()
 	pb.RegisterProductSaleServiceServer(s, &server{producer: producer})
 
-	fmt.Println("🚀 Worker gRPC listo en puerto 50051")
-	if err := s.Serve(lis); err != nil { log.Fatalf("❌ Falló serve: %v", err) }
+	fmt.Println("[READY] Worker gRPC listo en puerto 50051")
+	if err := s.Serve(lis); err != nil { log.Fatalf("[ERROR] Falló serve: %v", err) }
 }

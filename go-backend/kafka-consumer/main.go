@@ -8,96 +8,103 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/IBM/sarama" // Cliente de Kafka
-	"github.com/go-redis/redis/v8" // Cliente de Redis/Valkey
+	"github.com/IBM/sarama"
+	"github.com/go-redis/redis/v8"
 )
 
-// Estructura del mensaje (coincide con lo que el Worker publica)
 type VentaMsg struct {
+	Categoria       int     `json:"categoria"`
 	ProductoID      string  `json:"producto_id"`
 	Precio          float64 `json:"precio"`
 	CantidadVendida int32   `json:"cantidad_vendida"`
 }
 
-// Contexto para el cliente Redis
 var ctx = context.Background()
 
+// Mapa para traducir el ID numérico a nombre
+var categorias = map[int]string{
+	0: "Electronica",
+	1: "Ropa",
+	2: "Hogar",
+	3: "Belleza",
+}
+
 func main() {
-	// 1. Configuración de Kafka (URL del servicio en Kubernetes)
 	kafkaBrokers := os.Getenv("KAFKA_BROKER_URL")
-	if kafkaBrokers == "" {
-		kafkaBrokers = "my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092" // Default para K8s
-	}
+	if kafkaBrokers == "" { kafkaBrokers = "my-cluster-kafka-brokers.kafka.svc.cluster.local:9092" }
 	
-	// 2. Configuración de Valkey (URL del servicio en Kubernetes)
 	valkeyAddr := os.Getenv("VALKEY_ADDRESS")
-	if valkeyAddr == "" {
-		valkeyAddr = "valkey-service:6379" // Default para K8s
-	}
+	if valkeyAddr == "" { valkeyAddr = "valkey-service:6379" }
 
-	// 3. Conectar a Valkey/Redis
-	rdb := redis.NewClient(&redis.Options{
-		Addr: valkeyAddr,
-	})
+	// Conectar a Valkey
+	rdb := redis.NewClient(&redis.Options{Addr: valkeyAddr})
 	
-	// Reintentos de conexión
-	for i := 0; i < 5; i++ {
-		_, err := rdb.Ping(ctx).Result()
-		if err == nil {
-			fmt.Println("✅ Conexión exitosa a Valkey/Redis")
-			break
-		}
-		log.Printf("Intento %d fallido con Valkey: %v. Reintentando en 5s...", i+1, err)
-		time.Sleep(5 * time.Second)
-	}
-	defer rdb.Close()
+	fmt.Printf("[CONNECT] Conectando Consumidor a Kafka: %s y Valkey: %s\n", kafkaBrokers, valkeyAddr)
 
-	// 4. Conectar a Kafka Consumer
+	// Configurar Kafka
 	config := sarama.NewConfig()
-	config.Consumer.Offsets.Initial = sarama.OffsetOldest // Leer desde el principio del tópico
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	consumer, err := sarama.NewConsumer([]string{kafkaBrokers}, config)
-	if err != nil {
-		log.Fatalf("❌ Error creando consumidor Kafka: %v", err)
-	}
+	if err != nil { log.Fatalf("[ERROR] Error Kafka: %v", err) }
 	defer consumer.Close()
 
-	partitionConsumer, err := consumer.ConsumePartition("ventas-topic", 0, sarama.OffsetOldest)
-	if err != nil {
-		log.Fatalf("❌ Error creando consumidor de partición: %v", err)
-	}
+	partitionConsumer, err := consumer.ConsumePartition("ventas-topic", 0, sarama.OffsetNewest)
+	if err != nil { log.Fatalf("[ERROR] Error Partición: %v", err) }
 	defer partitionConsumer.Close()
 
-	fmt.Printf("🔌 Consumidor Kafka escuchando en '%s' (Valkey: %s)...\n", kafkaBrokers, valkeyAddr)
-
-	// 5. Manejar señales de interrupción para cerrar limpiamente
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
-	// 6. Loop de procesamiento de mensajes
+	fmt.Println("[RUNNING] Consumidor Inteligente v5 LISTO. Procesando métricas...")
+
 	for {
 		select {
 		case msg := <-partitionConsumer.Messages():
 			var venta VentaMsg
-			if err := json.Unmarshal(msg.Value, &venta); err != nil {
-				log.Printf("❌ Error al deserializar mensaje: %v", err)
-				continue
+			if err := json.Unmarshal(msg.Value, &venta); err != nil { continue }
+			
+			catName := categorias[venta.Categoria]
+			if catName == "" { catName = "Desconocido" }
+
+			// --- 1. GUARDAR DATA CRUDA (Log) ---
+			rdb.XAdd(ctx, &redis.XAddArgs{
+				Stream: fmt.Sprintf("stream:precios:%s", catName),
+				MaxLen: 1000,
+				Values: map[string]interface{}{
+					"precio": venta.Precio,
+					"producto": venta.ProductoID,
+				},
+			})
+
+			// --- 2. ACTUALIZAR ESTADÍSTICAS (Para los paneles Stat y Pie) ---
+			
+			// A) Contadores por Categoría (Barra)
+			rdb.HIncrBy(ctx, "stats:categoria:count", catName, 1)
+			
+			// B) Suma de Precios para Promedio (Barra)
+			rdb.HIncrByFloat(ctx, "stats:categoria:sum_precio", catName, venta.Precio)
+
+			// C) Ranking de Productos (General) - ZSET
+			rdb.ZIncrBy(ctx, "stats:productos:ranking", float64(venta.CantidadVendida), venta.ProductoID)
+
+			// D) Ranking de Productos (Por Categoría) - ZSET
+			rdb.ZIncrBy(ctx, fmt.Sprintf("stats:productos:ranking:%s", catName), float64(venta.CantidadVendida), venta.ProductoID)
+
+			// E) Precio Máximo y Mínimo (General)
+			currMax, _ := rdb.Get(ctx, "stats:precio:max").Float64()
+			if venta.Precio > currMax {
+				rdb.Set(ctx, "stats:precio:max", venta.Precio, 0)
 			}
-			
-			// Guardar en Valkey
-			key := fmt.Sprintf("venta:%s:%d", venta.ProductoID, msg.Offset) // Clave única
-			val := string(msg.Value) // Guardamos el JSON original
-			
-			err := rdb.Set(ctx, key, val, 0).Err() // 0 = sin expiración
-			if err != nil {
-				log.Printf("❌ Error guardando en Valkey: %v", err)
-			} else {
-				fmt.Printf("📦 Valkey guardó: %s - Offset %d\n", venta.ProductoID, msg.Offset)
+			currMin, _ := rdb.Get(ctx, "stats:precio:min").Float64()
+			if currMin == 0 || venta.Precio < currMin {
+				rdb.Set(ctx, "stats:precio:min", venta.Precio, 0)
 			}
 
+			// Agrega "FIXED" al principio para reconocerlo en el log
+			fmt.Printf("[FIXED] %s ($%.2f) - Cat: %s\n", venta.ProductoID, venta.Precio, catName)
+
 		case <-sigchan:
-			fmt.Println("\n[!] Consumidor detenido.")
 			return
 		}
 	}

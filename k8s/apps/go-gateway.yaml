@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: go-gateway
-        image: 3.131.135.47:5000/go-gateway:v1
+        image: 3.133.84.214:5000/go-gateway:v-final
         ports:
         - containerPort: 3000
         env:

@@ -24,8 +24,6 @@ type VentaInput struct {
 
 func main() {
 	// 1. Conectar con el Servidor gRPC (Worker)
-	// Nota: "localhost" funciona ahora porque estamos en la misma PC. 
-	// En Kubernetes, aquí pondremos el nombre del servicio DNS.
 	grpcHost := os.Getenv("GRPC_HOST")
 	if grpcHost == "" {
 		grpcHost = "localhost:50051"
@@ -50,7 +48,7 @@ func main() {
 			return
 		}
 
-		fmt.Printf("📨 Intermediario recibió HTTP: %s. Enviando a gRPC...\n", json.ProductoID)
+		fmt.Printf("[RECEIVED] Intermediario recibió HTTP: %s. Enviando a gRPC...\n", json.ProductoID)
 
 		// 3. Enviar a gRPC
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -72,6 +70,6 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "Enviado a gRPC", "respuesta_worker": r_grpc.Estado})
 	})
 
-	fmt.Println("🚀 Intermediario Go corriendo en puerto 3000")
+	fmt.Println("[READY] Intermediario Go corriendo en puerto 3000")
 	r.Run(":3000") // Escuchar en puerto 3000
 }
