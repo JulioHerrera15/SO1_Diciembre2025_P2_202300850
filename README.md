@@ -183,6 +183,9 @@ Ejecutar Valkey en una VM (KubeVirt) introduce una capa adicional de abstracció
 *   **Ventaja:** Aislamiento total del kernel, útil para bases de datos que requieren configuraciones de SO específicas o persistencia robusta.
 *   **Desventaja:** Tiempo de arranque lento (minutos vs segundos de un contenedor) y mayor consumo de RAM (overhead del SO invitado). Para bases de datos en memoria de alto rendimiento, un contenedor nativo suele ser más eficiente, pero KubeVirt ofrece mayor flexibilidad de infraestructura.
 
+### HPA en Rust API
+El uso de HPA permitió que la API de Rust escalara automáticamente bajo carga, manteniendo tiempos de respuesta aceptables. Las répilicas adicionales se activaron cuando el CPU superó el umbral del 30%, demostrando la efectividad del escalado automático en Kubernetes. Esto ayudó a manejar picos de tráfico durante las pruebas de Locust sin degradación significativa del rendimiento. Al activarse las 3 réplicas, el porcentaje de CPU se distribuyó, manteniendo la latencia baja, sin sobrepasar los límites establecidos (CPU > 30%).
+
 ---
 
 ## 5. Proceso de Desarrollo y Retos Resueltos
